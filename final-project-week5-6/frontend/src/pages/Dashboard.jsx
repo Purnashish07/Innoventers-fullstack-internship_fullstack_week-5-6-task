@@ -50,7 +50,7 @@ export default function Dashboard() {
   const [demoProcessing, setDemoProcessing] = useState(false);
   const [demoSuccess, setDemoSuccess] = useState(false);
   const [cacheHit, setCacheHit] = useState(false);
-  const isDemoMode = String(import.meta.env.VITE_DEMO_PAYMENT_MODE || "true").toLowerCase() === "true";
+  const isDemoMode = String(import.meta.env.VITE_DEMO_MODE || "false").toLowerCase() === "true" || String(import.meta.env.VITE_DEMO_PAYMENT_MODE || "false").toLowerCase() === "true";
 
   useEffect(() => {
     const timer = setTimeout(() => dispatch(fetchProjects({ search })), 350);
@@ -93,15 +93,30 @@ export default function Dashboard() {
   const handlePay = async () => {
     setPayLoading(true);
     try {
-      const endpoint = isDemoMode ? "/projects/payment/demo/order" : "/projects/payment/order";
-      const { data } = await API.post(endpoint, { amount: 499 });
-
       if (isDemoMode) {
-        setDemoPaymentData(data);
+        const demoData = {
+          success: true,
+          mode: "demo",
+          provider: "demo",
+          order: {
+            id: `DEMO_ORDER_${Date.now()}`,
+            amount: 49900,
+            currency: "INR",
+            receipt: `demo_premium_${user?._id || "user"}_${Date.now()}`,
+          },
+          paymentId: `DEMO_PAY_${Date.now()}`,
+          key: null,
+          message: "Demo payment ready",
+        };
+        setDemoPaymentData(demoData);
         setDemoPaymentOpen(true);
         setDemoSuccess(false);
+        setPayLoading(false);
         return;
       }
+
+      const endpoint = "/projects/payment/order";
+      const { data } = await API.post(endpoint, { amount: 499 });
 
       if (!window.Razorpay) {
         toast.error("Razorpay SDK is unavailable. Please reload the page and try again.");
@@ -160,22 +175,13 @@ export default function Dashboard() {
     if (!demoPaymentData) return;
     setDemoProcessing(true);
     try {
-      const verifyResponse = await API.post("/projects/payment/demo/verify", {
-        orderId: demoPaymentData.order?.id,
-        paymentId: demoPaymentData.paymentId,
-      });
-
-      if (verifyResponse.data?.success) {
-        const updatedUser = { ...user, isPremium: true };
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        dispatch({ type: "auth/setUser", payload: updatedUser });
-        setDemoSuccess(true);
-        toast.success("Payment Successful — ₹499 Demo Payment Completed");
-      } else {
-        toast.error(verifyResponse.data?.message || "Demo payment verification failed.");
-      }
+      const updatedUser = { ...user, isPremium: true };
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      dispatch({ type: "auth/setUser", payload: updatedUser });
+      setDemoSuccess(true);
+      toast.success("Payment Successful — ₹499 Demo Payment Completed");
     } catch (error) {
-      toast.error(error.response?.data?.message || "Demo payment verification failed.");
+      toast.error("Demo payment verification failed.");
     } finally {
       setDemoProcessing(false);
     }
